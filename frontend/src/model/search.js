@@ -4,7 +4,9 @@ import API from '/src/model/api'
 
 const searchTerm = ref('')
 const results = ref()
+const artistResults = ref([])
 const isSearching = ref(false)
+const isSearchingArtists = ref(false)
 const error = ref(false)
 const errorValue = ref('')
 
@@ -29,17 +31,32 @@ function useSearchManager() {
     return (
       str.includes('://open.spotify.com/track/') ||
       str.includes('://open.spotify.com/album/') ||
-      str.includes('://open.spotify.com/playlist/')
+      str.includes('://open.spotify.com/playlist/') ||
+      str.includes('://open.spotify.com/artist/')
     )
   }
 
   function searchFor(query) {
     console.log('Searching for:', query)
     results.value = []
+    artistResults.value = []
     isSearching.value = true
+    isSearchingArtists.value = true
     searchTerm.value = query
     error.value = false
     errorValue.value = ''
+    API.searchArtists(query)
+      .then((res) => {
+        if (res.status === 200) {
+          artistResults.value = res.data || []
+        }
+      })
+      .catch((err) => {
+        console.error('Artist search failed:', err.message)
+      })
+      .finally(() => {
+        isSearchingArtists.value = false
+      })
     API.search(query)
       .then((res) => {
         console.log('Received Search Data:', res.data)
@@ -64,7 +81,9 @@ function useSearchManager() {
   return {
     searchTerm,
     isSearching,
+    isSearchingArtists,
     results,
+    artistResults,
     error,
     errorValue,
     searchFor,

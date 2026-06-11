@@ -31,6 +31,7 @@ export default {
     songs: 'Songs',
     albums: 'Albums',
     playlists: 'Playlists',
+    artists: 'Artists',
   },
   search: {
     placeholder: 'Search, paste a Spotify or YouTube Music link…',
@@ -78,6 +79,13 @@ export default {
     deleteFile: 'Delete file',
     play: 'Play',
   },
+  artist: {
+    title: 'Artists',
+    watch: 'Watch artist (auto-download new releases)',
+    watching: 'Watching — open the watchlist',
+    downloadAll: 'Download full discography',
+    showMore: 'Show more artists',
+  },
   monitor: {
     title: 'Playlist Monitor',
     subtitle:
@@ -111,6 +119,18 @@ export default {
     every1w: 'Every week',
     every2w: 'Every 2 weeks',
     every1mo: 'Every month',
+    every3d: 'Every 3 days',
+    short3d: '3 days',
+    artistTitle: 'Artist Watchlist',
+    artistSubtitle:
+      'Add Spotify artists to watch. New releases are downloaded automatically on the next scheduled check.',
+    watchNewArtist: 'Watch a new artist',
+    artistUrlPlaceholder: 'Paste a Spotify artist URL…',
+    failedAddArtist: 'Failed to add artist. Check the URL and try again.',
+    artistEmpty: 'No artists being watched yet.',
+    artistEmptyHint:
+      'Paste a Spotify artist link above, or search for an artist by name.',
+    deleteArtistPrompt: 'Stop watching "{name}"?',
     short15: '15 min',
     short30: '30 min',
     short1h: '1 h',

@@ -31,6 +31,7 @@ export default {
     songs: 'Canciones',
     albums: 'Álbumes',
     playlists: 'Listas',
+    artists: 'Artistas',
   },
   search: {
     placeholder: 'Busca o pega un enlace de Spotify o YouTube Music…',
@@ -80,6 +81,13 @@ export default {
     deleteFile: 'Eliminar archivo',
     play: 'Reproducir',
   },
+  artist: {
+    title: 'Artistas',
+    watch: 'Vigilar artista (descarga automática de novedades)',
+    watching: 'Vigilando — abrir la lista de vigilancia',
+    downloadAll: 'Descargar discografía completa',
+    showMore: 'Mostrar más artistas',
+  },
   monitor: {
     title: 'Monitor de listas',
     subtitle:
@@ -114,6 +122,19 @@ export default {
     every1w: 'Cada semana',
     every2w: 'Cada 2 semanas',
     every1mo: 'Cada mes',
+    every3d: 'Cada 3 días',
+    short3d: '3 días',
+    artistTitle: 'Artistas vigilados',
+    artistSubtitle:
+      'Añade artistas de Spotify para vigilar. Los nuevos lanzamientos se descargan automáticamente en la siguiente revisión programada.',
+    watchNewArtist: 'Vigilar un nuevo artista',
+    artistUrlPlaceholder: 'Pega una URL de artista de Spotify…',
+    failedAddArtist:
+      'No se pudo añadir el artista. Comprueba la URL e inténtalo de nuevo.',
+    artistEmpty: 'Aún no hay artistas vigilados.',
+    artistEmptyHint:
+      'Pega un enlace de artista de Spotify arriba o busca un artista por nombre.',
+    deleteArtistPrompt: '¿Dejar de vigilar a "{name}"?',
     short15: '15 min',
     short30: '30 min',
     short1h: '1 h',

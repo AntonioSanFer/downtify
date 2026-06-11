@@ -190,6 +190,192 @@
         </li>
       </ul>
 
+      <!-- ================= Artists ================= -->
+      <div class="mt-12 mb-8">
+        <h1 class="text-2xl font-bold tracking-tight">
+          {{ t('monitor.artistTitle') }}
+        </h1>
+        <p class="mt-1 text-sm text-base-content/60">
+          {{ t('monitor.artistSubtitle') }}
+        </p>
+      </div>
+
+      <!-- Add artist form -->
+      <div class="surface rounded-2xl p-5 mb-8">
+        <h2
+          class="text-sm font-semibold uppercase tracking-wider text-base-content/50 mb-4"
+        >
+          {{ t('monitor.watchNewArtist') }}
+        </h2>
+        <form
+          @submit.prevent="onAddArtist"
+          class="flex flex-col sm:flex-row gap-3"
+        >
+          <input
+            v-model="newArtistUrl"
+            type="text"
+            :placeholder="t('monitor.artistUrlPlaceholder')"
+            class="input-modern flex-1 h-11 text-sm"
+            :disabled="addingArtist"
+          />
+          <div class="flex items-center gap-2 shrink-0">
+            <select
+              v-model="newArtistInterval"
+              class="select select-sm rounded-full border border-white/10 bg-base-100/85 focus:border-primary/60 h-11 px-3 text-sm"
+              :disabled="addingArtist"
+            >
+              <option :value="720">{{ t('monitor.every12h') }}</option>
+              <option :value="1440">{{ t('monitor.every1d') }}</option>
+              <option :value="4320">{{ t('monitor.every3d') }}</option>
+              <option :value="10080">{{ t('monitor.every1w') }}</option>
+              <option :value="20160">{{ t('monitor.every2w') }}</option>
+              <option :value="43200">{{ t('monitor.every1mo') }}</option>
+            </select>
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm h-11 px-5 rounded-full"
+              :disabled="addingArtist || !newArtistUrl.trim()"
+            >
+              <span
+                v-if="addingArtist"
+                class="loading loading-spinner loading-xs"
+              />
+              <span v-else>{{ t('monitor.watch') }}</span>
+            </button>
+          </div>
+        </form>
+        <p v-if="addArtistError" class="mt-2 text-xs text-error">
+          {{ addArtistError }}
+        </p>
+      </div>
+
+      <!-- Loading skeleton -->
+      <div v-if="loadingArtists" class="space-y-3">
+        <div v-for="n in 2" :key="n" class="skeleton h-24 rounded-2xl" />
+      </div>
+
+      <!-- Empty state -->
+      <div
+        v-else-if="artists.length === 0"
+        class="surface rounded-2xl p-12 flex flex-col items-center text-center"
+      >
+        <Icon
+          icon="clarity:user-line"
+          class="h-12 w-12 text-base-content/20 mb-4"
+        />
+        <p class="text-base-content/50 text-sm">
+          {{ t('monitor.artistEmpty') }}
+        </p>
+        <p class="text-base-content/40 text-xs mt-1">
+          {{ t('monitor.artistEmptyHint') }}
+        </p>
+      </div>
+
+      <!-- Artist cards -->
+      <ul v-else class="space-y-3">
+        <li
+          v-for="ar in artists"
+          :key="ar.id"
+          class="surface rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+        >
+          <!-- Info -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="font-semibold truncate">{{ ar.name }}</span>
+              <span
+                class="pill shrink-0"
+                :class="ar.enabled ? 'badge-soft' : 'badge-neutral-soft'"
+              >
+                {{ ar.enabled ? t('monitor.active') : t('monitor.paused') }}
+              </span>
+            </div>
+            <div
+              class="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-base-content/50"
+            >
+              <span>
+                <Icon
+                  icon="clarity:refresh-line"
+                  class="inline h-3 w-3 mr-0.5"
+                />
+                {{
+                  t('monitor.everyInterval', {
+                    interval: formatInterval(ar.interval_minutes),
+                  })
+                }}
+              </span>
+              <span>
+                <Icon
+                  icon="clarity:music-note-line"
+                  class="inline h-3 w-3 mr-0.5"
+                />
+                {{
+                  ar.last_track_count === 1
+                    ? t('monitor.tracksOne', { count: ar.last_track_count })
+                    : t('monitor.tracksMany', { count: ar.last_track_count })
+                }}
+              </span>
+              <span v-if="ar.last_checked">
+                <Icon icon="clarity:clock-line" class="inline h-3 w-3 mr-0.5" />
+                {{ t('monitor.checked', { when: timeAgo(ar.last_checked) }) }}
+              </span>
+              <span v-else class="italic">{{ t('monitor.notChecked') }}</span>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex items-center gap-2 shrink-0">
+            <!-- Interval selector -->
+            <select
+              :value="ar.interval_minutes"
+              @change="onChangeArtistInterval(ar, $event)"
+              class="select select-xs rounded-full border border-white/10 bg-base-100/60 text-xs focus:border-primary/60"
+            >
+              <option :value="720">{{ t('monitor.short12h') }}</option>
+              <option :value="1440">{{ t('monitor.short1d') }}</option>
+              <option :value="4320">{{ t('monitor.short3d') }}</option>
+              <option :value="10080">{{ t('monitor.short1w') }}</option>
+              <option :value="20160">{{ t('monitor.short2w') }}</option>
+              <option :value="43200">{{ t('monitor.short1mo') }}</option>
+            </select>
+
+            <!-- Toggle enabled -->
+            <button
+              class="icon-btn"
+              :title="ar.enabled ? t('monitor.pause') : t('monitor.resume')"
+              @click="onToggleArtist(ar)"
+            >
+              <Icon
+                :icon="ar.enabled ? 'clarity:pause-line' : 'clarity:play-line'"
+                class="h-4 w-4"
+              />
+            </button>
+
+            <!-- Manual check -->
+            <button
+              class="icon-btn"
+              :title="t('monitor.checkNow')"
+              :disabled="checkingArtist[ar.id]"
+              @click="onCheckArtist(ar)"
+            >
+              <span
+                v-if="checkingArtist[ar.id]"
+                class="loading loading-spinner loading-xs"
+              />
+              <Icon v-else icon="clarity:refresh-line" class="h-4 w-4" />
+            </button>
+
+            <!-- Delete -->
+            <button
+              class="icon-btn text-error/70 hover:text-error hover:bg-error/10"
+              :title="t('monitor.stop')"
+              @click="onDeleteArtist(ar)"
+            >
+              <Icon icon="clarity:trash-line" class="h-4 w-4" />
+            </button>
+          </div>
+        </li>
+      </ul>
+
       <!-- Info banner -->
       <div
         class="mt-8 surface rounded-2xl p-4 flex gap-3 text-sm text-base-content/60"
@@ -222,6 +408,14 @@ const newUrl = ref('')
 const newInterval = ref(60)
 const checking = ref({})
 
+const artists = ref([])
+const loadingArtists = ref(false)
+const addingArtist = ref(false)
+const addArtistError = ref('')
+const newArtistUrl = ref('')
+const newArtistInterval = ref(1440)
+const checkingArtist = ref({})
+
 async function load() {
   loading.value = true
   try {
@@ -229,6 +423,84 @@ async function load() {
     playlists.value = res.data || []
   } finally {
     loading.value = false
+  }
+}
+
+async function loadArtists() {
+  loadingArtists.value = true
+  try {
+    const res = await monitorAPI.listMonitoredArtists()
+    artists.value = res.data || []
+  } finally {
+    loadingArtists.value = false
+  }
+}
+
+async function onAddArtist() {
+  addArtistError.value = ''
+  addingArtist.value = true
+  try {
+    const res = await monitorAPI.addMonitoredArtist(
+      newArtistUrl.value.trim(),
+      newArtistInterval.value
+    )
+    artists.value.unshift(res.data)
+    newArtistUrl.value = ''
+  } catch (e) {
+    addArtistError.value =
+      e?.response?.data?.detail || t('monitor.failedAddArtist')
+  } finally {
+    addingArtist.value = false
+  }
+}
+
+async function onToggleArtist(ar) {
+  try {
+    const res = await monitorAPI.updateMonitoredArtist(ar.id, {
+      enabled: !ar.enabled,
+    })
+    Object.assign(ar, res.data)
+  } catch {
+    // silently ignore
+  }
+}
+
+async function onChangeArtistInterval(ar, event) {
+  const val = parseInt(event.target.value, 10)
+  try {
+    const res = await monitorAPI.updateMonitoredArtist(ar.id, {
+      interval_minutes: val,
+    })
+    Object.assign(ar, res.data)
+  } catch {
+    // silently ignore
+  }
+}
+
+async function onCheckArtist(ar) {
+  checkingArtist.value = { ...checkingArtist.value, [ar.id]: true }
+  try {
+    await monitorAPI.checkMonitoredArtist(ar.id)
+    setTimeout(async () => {
+      try {
+        const res = await monitorAPI.listMonitoredArtists()
+        artists.value = res.data || []
+      } finally {
+        checkingArtist.value = { ...checkingArtist.value, [ar.id]: false }
+      }
+    }, 3000)
+  } catch {
+    checkingArtist.value = { ...checkingArtist.value, [ar.id]: false }
+  }
+}
+
+async function onDeleteArtist(ar) {
+  if (!confirm(t('monitor.deleteArtistPrompt', { name: ar.name }))) return
+  try {
+    await monitorAPI.deleteMonitoredArtist(ar.id)
+    artists.value = artists.value.filter((a) => a.id !== ar.id)
+  } catch {
+    // silently ignore
   }
 }
 
@@ -328,5 +600,8 @@ function timeAgo(isoString) {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadArtists()
+})
 </script>

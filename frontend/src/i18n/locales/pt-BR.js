@@ -31,6 +31,7 @@ export default {
     songs: 'Músicas',
     albums: 'Álbuns',
     playlists: 'Playlists',
+    artists: 'Artistas',
   },
   search: {
     placeholder:
@@ -79,6 +80,13 @@ export default {
     deleteFile: 'Excluir arquivo',
     play: 'Reproduzir',
   },
+  artist: {
+    title: 'Artistas',
+    watch: 'Monitorar artista (baixar novos lançamentos)',
+    watching: 'Monitorando — abrir a lista',
+    downloadAll: 'Baixar discografia completa',
+    showMore: 'Mostrar mais artistas',
+  },
   monitor: {
     title: 'Monitor de playlists',
     subtitle:
@@ -113,6 +121,19 @@ export default {
     every1w: 'Toda semana',
     every2w: 'A cada 2 semanas',
     every1mo: 'Todo mês',
+    every3d: 'A cada 3 dias',
+    short3d: '3 dias',
+    artistTitle: 'Artistas monitorados',
+    artistSubtitle:
+      'Adicione artistas do Spotify para monitorar. Novos lançamentos são baixados automaticamente na próxima verificação agendada.',
+    watchNewArtist: 'Monitorar um novo artista',
+    artistUrlPlaceholder: 'Cole uma URL de artista do Spotify…',
+    failedAddArtist:
+      'Falha ao adicionar o artista. Verifique a URL e tente novamente.',
+    artistEmpty: 'Nenhum artista sendo monitorado ainda.',
+    artistEmptyHint:
+      'Cole um link de artista do Spotify acima ou busque um artista pelo nome.',
+    deleteArtistPrompt: 'Parar de monitorar "{name}"?',
     short15: '15 min',
     short30: '30 min',
     short1h: '1 h',

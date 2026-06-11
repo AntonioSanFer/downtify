@@ -47,6 +47,14 @@ function search(query) {
   return API.get('/api/songs/search', { params: { query } })
 }
 
+function searchArtists(query) {
+  return API.get('/api/artist/search', { params: { query } })
+}
+
+function artistTracks(url) {
+  return API.get('/api/artist/tracks', { params: { url } })
+}
+
 function open(songURL) {
   return API.get('/api/song/url', { params: { url: songURL } })
 }
@@ -127,6 +135,8 @@ function ws_onerror(fn) {
 
 export default {
   search,
+  searchArtists,
+  artistTracks,
   open,
   download,
   downloadBatch,

@@ -2,6 +2,7 @@
   <div class="min-h-screen">
     <Navbar />
     <Settings />
+    <ArtistList />
     <SearchList
       :data="sm.results.value"
       :error="sm.error.value"
@@ -20,6 +21,7 @@ import { useDownloadManager } from '../model/download'
 import Navbar from '/src/components/Navbar.vue'
 import Settings from '/src/components/Settings.vue'
 import SearchList from '/src/components/SearchList.vue'
+import ArtistList from '/src/components/ArtistList.vue'
 
 onMounted(() => window.scroll(0, 0))
 

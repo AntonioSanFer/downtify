@@ -50,6 +50,10 @@
             ><span class="h-1.5 w-1.5 rounded-full bg-primary"></span>
             {{ t('hero.playlists') }}</span
           >
+          <span class="pill bg-white/5 border border-white/10"
+            ><span class="h-1.5 w-1.5 rounded-full bg-primary"></span>
+            {{ t('hero.artists') }}</span
+          >
         </div>
       </div>
     </div>

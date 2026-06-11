@@ -6,6 +6,8 @@ working without changes:
 
 * ``GET  /api/version``
 * ``GET  /api/songs/search``
+* ``GET  /api/artist/search`` (Spotify artist search by name)
+* ``GET  /api/artist/tracks`` (full discography for an artist URL/id)
 * ``GET  /api/song/url`` and ``GET /api/url`` (alias)
 * ``POST /api/download/url`` (optional JSON body: resolved Spotify row so
   ``track_number`` / ``album_track_total`` survive re-fetch by URL)
@@ -38,7 +40,12 @@ from loguru import logger
 
 from . import m3u, providers, spotify
 from .downloader import Downloader
-from .monitor import PlaylistMonitorDB, check_playlist
+from .monitor import (
+    ARTIST_DEFAULT_INTERVAL_MINUTES,
+    PlaylistMonitorDB,
+    check_artist,
+    check_playlist,
+)
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     'audio_providers': ['youtube-music'],
@@ -149,6 +156,51 @@ def search_endpoint(query: str = Query('')) -> list[dict[str, Any]]:
     return providers.search_songs(query, limit=20)
 
 
+@router.get('/api/artist/search')
+def artist_search_endpoint(query: str = Query('')) -> list[dict[str, Any]]:
+    try:
+        return spotify.search_artists(query, limit=10)
+    except Exception as exc:
+        logger.exception('Artist search failed for {!r}', query)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+def _artist_id_from(url_or_id: str) -> str:
+    parsed = spotify.parse_spotify_url(url_or_id)
+    if parsed is not None:
+        kind, sid = parsed
+        if kind != 'artist':
+            raise HTTPException(
+                status_code=400, detail='Not a Spotify artist URL'
+            )
+        return sid
+    if re.fullmatch(r'[A-Za-z0-9]+', url_or_id or ''):
+        return url_or_id
+    raise HTTPException(
+        status_code=400, detail='A Spotify artist URL or id is required'
+    )
+
+
+@router.get('/api/artist/tracks')
+async def artist_tracks_endpoint(url: str = Query(...)) -> dict[str, Any]:
+    """Resolve the full (de-duplicated) discography for an artist."""
+
+    artist_id = _artist_id_from(url)
+    try:
+        name, tracks = await asyncio.to_thread(
+            spotify.artist_all_tracks, artist_id
+        )
+    except Exception as exc:
+        logger.exception('Failed to resolve artist {}', artist_id)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        'artist_id': artist_id,
+        'name': name,
+        'url': f'https://open.spotify.com/artist/{artist_id}',
+        'tracks': tracks,
+    }
+
+
 @router.get('/api/song/url')
 def song_url_endpoint(url: str = Query(...)):
     return _resolve_url(url)
@@ -171,6 +223,8 @@ def _resolve_url(url: str):
             return spotify.album_tracks_from_id(sid)
         if kind == 'playlist':
             return spotify.playlist_tracks_from_id(sid)
+        if kind == 'artist':
+            return spotify.artist_all_tracks(sid)[1]
     except Exception as exc:
         logger.exception('Failed to resolve Spotify URL {}', url)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -763,3 +817,142 @@ async def manual_check_playlist(playlist_id: int) -> dict[str, Any]:
 
     asyncio.create_task(_run())
     return {'status': 'check_started', 'id': playlist_id}
+
+
+# ---------------------------------------------------------------------------
+# Artist monitoring endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get('/api/monitor/artists')
+async def list_monitor_artists() -> list[dict[str, Any]]:
+    db = _require_monitor_db()
+    artists = await asyncio.to_thread(db.list_artists)
+    return [a.to_dict() for a in artists]
+
+
+@router.post('/api/monitor/artists')
+async def add_monitor_artist(request: Request) -> dict[str, Any]:
+    db = _require_monitor_db()
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    url = payload.get('url', '')
+    interval_minutes = int(
+        payload.get('interval_minutes', ARTIST_DEFAULT_INTERVAL_MINUTES)
+    )
+
+    spotify_id = _artist_id_from(url)
+
+    existing = await asyncio.to_thread(db.get_artist_by_spotify_id, spotify_id)
+    if existing is not None:
+        raise HTTPException(
+            status_code=409, detail='This artist is already being monitored'
+        )
+
+    try:
+        info = await asyncio.to_thread(spotify.artist_info_from_id, spotify_id)
+    except Exception as exc:
+        logger.exception('Failed to resolve artist {}', spotify_id)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    artist = await asyncio.to_thread(
+        db.add_artist,
+        spotify_id,
+        info.get('name') or spotify_id,
+        f'https://open.spotify.com/artist/{spotify_id}',
+        interval_minutes,
+    )
+
+    # Kick off the first backfill immediately, mirroring playlist adds.
+    if state.downloader is not None:
+        loop = state.loop or asyncio.get_running_loop()
+
+        async def _initial_check(a=artist) -> None:
+            try:
+                await check_artist(
+                    a,
+                    db,
+                    state.downloader,  # type: ignore[arg-type]
+                    state.connections.broadcast,
+                    loop,
+                    state.settings,
+                )
+            except Exception:
+                logger.exception('Initial check failed for artist {}', a.id)
+
+        asyncio.create_task(_initial_check())
+
+    return artist.to_dict()
+
+
+@router.patch('/api/monitor/artists/{artist_id}')
+async def update_monitor_artist(
+    artist_id: int, request: Request
+) -> dict[str, Any]:
+    db = _require_monitor_db()
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    kwargs: dict[str, Any] = {}
+    if 'interval_minutes' in payload:
+        kwargs['interval_minutes'] = int(payload['interval_minutes'])
+    if 'enabled' in payload:
+        kwargs['enabled'] = bool(payload['enabled'])
+
+    updated = await asyncio.to_thread(db.update_artist, artist_id, **kwargs)
+    if updated is None:
+        raise HTTPException(
+            status_code=404, detail='Monitored artist not found'
+        )
+    return updated.to_dict()
+
+
+@router.delete('/api/monitor/artists/{artist_id}')
+async def delete_monitor_artist(artist_id: int) -> dict[str, Any]:
+    db = _require_monitor_db()
+    deleted = await asyncio.to_thread(db.delete_artist, artist_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=404, detail='Monitored artist not found'
+        )
+    return {'deleted': True, 'id': artist_id}
+
+
+@router.post('/api/monitor/artists/{artist_id}/check')
+async def manual_check_artist(artist_id: int) -> dict[str, Any]:
+    db = _require_monitor_db()
+    artist = await asyncio.to_thread(db.get_artist, artist_id)
+    if artist is None:
+        raise HTTPException(
+            status_code=404, detail='Monitored artist not found'
+        )
+    if state.downloader is None:
+        raise HTTPException(status_code=500, detail='Downloader not ready')
+
+    loop = state.loop or asyncio.get_running_loop()
+
+    async def _run() -> None:
+        try:
+            count = await check_artist(
+                artist,  # type: ignore[arg-type]
+                db,
+                state.downloader,  # type: ignore[arg-type]
+                state.connections.broadcast,
+                loop,
+                state.settings,
+            )
+            logger.info(
+                'Manual check: downloaded {} new track(s) from artist "{}"',
+                count,
+                artist.name,
+            )
+        except Exception:
+            logger.exception('Manual check failed for artist {}', artist_id)
+
+    asyncio.create_task(_run())
+    return {'status': 'check_started', 'id': artist_id}

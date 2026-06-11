@@ -39,7 +39,8 @@ It resolves track metadata directly from Spotify's public embed pages, finds the
 | Feature | Details |
 |---------|---------|
 | 🎵 **Tracks, albums & playlists** | Any Spotify link works — single track, full album, or entire playlist |
-| 👁️ **Playlist Monitor** | Watch playlists and **auto-download new songs** as they are added to Spotify |
+| 🎤 **Artist search & download** | Find an artist by name or paste an artist link to grab their whole discography |
+| 👁️ **Playlist & Artist Monitor** | Watch playlists **and artists** to **auto-download new songs** as they land on Spotify |
 | 🎨 **Rich metadata** | Album art, title, artist, album, year — all embedded in every file |
 | 🎚️ **Multiple formats** | MP3 · FLAC · M4A · OGG · OPUS |
 | 🔎 **Free-text search** | Search YouTube Music directly — no Spotify link needed |
@@ -136,6 +137,35 @@ You can pause, resume, force an immediate check, or stop monitoring any playlist
 
 ---
 
+## 🎤 Artist search & watchlist
+
+Besides single links, Downtify can work from an **artist** — either searched by name or pasted as a Spotify artist URL.
+
+**Search by name**
+
+1. Type an artist's name into the search bar
+2. Matching artists appear in their own results section above the track results
+3. From an artist card you can **download the full discography** (⬇) or **add the artist to your watchlist** (👁)
+
+**Download a discography**
+
+Pasting a Spotify artist URL (`https://open.spotify.com/artist/...`) — or clicking the download button on an artist card — resolves the artist's complete, **de-duplicated** catalog (albums first, then singles and other releases) and queues every track. Duplicate releases and tracks that appear on multiple albums are collapsed so you don't download the same song twice.
+
+**Artist Monitor**
+
+The **Artist Watchlist** mirrors the Playlist Monitor, but for artists: Downtify periodically checks a watched artist's discography and automatically downloads any **newly released** tracks.
+
+1. Open the eye icon (👁) in the navigation bar and switch to the **Artists** section
+2. Paste a Spotify artist URL
+3. Choose a check interval — artist checks default to **once a day** and can be set anywhere from every 12 hours up to once a month
+4. Click **Watch**
+
+Because walking an entire discography is heavier than re-reading a single playlist, artist checks use longer intervals than playlist checks by default. Tracks already released when you add the artist are recorded as "seen" and skipped — only releases that appear afterward are downloaded. As with playlists, you can pause, resume, force an immediate check, or remove any watched artist from the same page.
+
+> **Note** — Artist search and discography use Spotify's anonymous web-player API — no account, Premium subscription or API key required.
+
+---
+
 ## 🎛️ Download Settings
 
 Access the settings panel (⚙️ icon) to configure:
@@ -175,6 +205,7 @@ When the setting is **off** (default), the existing behaviour is preserved: sing
 | Spotify track | ✅ |
 | Spotify album | ✅ |
 | Spotify playlist | ✅ |
+| Spotify artist | ✅ |
 | YouTube Music search (free text) | ✅ |
 | Direct YouTube link | ✅ |
 

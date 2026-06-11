@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+from threading import Lock
 from typing import Any, Optional
 
 import requests
@@ -704,6 +706,310 @@ def playlist_info_and_tracks(
     return embed_name, _parse_playlist_tracks(entity)
 
 
+# ---------------------------------------------------------------------------
+# Artist support — anonymous-token partner GraphQL + embed pages
+# ---------------------------------------------------------------------------
+#
+# The public Spotify Web API (``api.spotify.com/v1``) rejects the anonymous
+# web-player token for ``/search`` and ``/artists/{id}/albums`` (HTTP 429 with
+# a multi-hour ``Retry-After``), so artist features go through the same partner
+# GraphQL endpoint used for playlist pagination instead.
+
+# sha256 of the persisted GraphQL documents in the Spotify web player. Update
+# these when the player bundle rolls and the API returns
+# ``PersistedQueryNotFound``. Location in the bundle:
+# ``new tz.l("<operationName>","query","<hash>",null)``.
+_GRAPHQL_HASH_SEARCH = (
+    '556f5a15b2fdd3a7113ffd377ad9805e38a3a27b8bb1ca7d6d76bad54aa8ee12'
+)
+_GRAPHQL_HASH_ARTIST_DISCOGRAPHY = (
+    '5e07d323febb57b4a56a42abbf781490e58764aa45feb6e3dc0591564fc56599'
+)
+
+# Embed pages of these Spotify-owned entities are fetched only to harvest an
+# anonymous web-player access token when no artist embed page is at hand.
+_TOKEN_SEED_ENTITIES: tuple[tuple[str, str], ...] = (
+    ('playlist', '37i9dQZF1DXcBWIGoYBM5M'),  # Today's Top Hits
+    ('artist', '06HL4z0CvFAxyc27GXpf02'),
+)
+
+_token_lock = Lock()
+_token_cache: dict[str, Any] = {'token': None, 'expires_at': 0.0}
+
+
+def _token_expiry_from_embed_payload(payload: dict[str, Any]) -> float:
+    try:
+        ms = payload['props']['pageProps']['state']['settings']['session'][
+            'accessTokenExpirationTimestampMs'
+        ]
+        return float(ms) / 1000.0
+    except (KeyError, TypeError, ValueError):
+        return time.time() + 1800.0
+
+
+def _cache_token_from_payload(payload: dict[str, Any]) -> Optional[str]:
+    """Store the anonymous token baked into an embed payload, if any."""
+
+    token = _token_from_embed_payload(payload)
+    if not token:
+        return None
+    with _token_lock:
+        _token_cache['token'] = token
+        _token_cache['expires_at'] = _token_expiry_from_embed_payload(payload)
+    return token
+
+
+def _anonymous_token(
+    seed: Optional[tuple[str, str]] = None,
+) -> str:
+    """Return a cached anonymous web-player token, refreshing if expired.
+
+    ``seed`` is an optional ``(kind, id)`` embed page to harvest from first
+    (e.g. the artist being resolved), before falling back to the static
+    Spotify-owned seed entities.
+    """
+
+    with _token_lock:
+        token = _token_cache['token']
+        if token and time.time() < _token_cache['expires_at'] - 30:
+            return token
+    seeds = ([seed] if seed else []) + list(_TOKEN_SEED_ENTITIES)
+    for kind, sid in seeds:
+        try:
+            payload = _fetch_embed_json(kind, sid)
+        except Exception:
+            logger.opt(exception=True).debug(
+                'Token seed embed fetch failed for {}/{}', kind, sid
+            )
+            continue
+        token = _cache_token_from_payload(payload)
+        if token:
+            return token
+    raise ValueError('Could not obtain an anonymous Spotify token')
+
+
+def _partner_graphql(
+    operation: str,
+    variables: dict[str, Any],
+    sha256: str,
+    token: str,
+) -> dict[str, Any]:
+    """Run a persisted GraphQL query against the Spotify partner endpoint."""
+
+    resp = requests.get(
+        _PARTNER_API,
+        params={
+            'operationName': operation,
+            'variables': json.dumps(variables),
+            'extensions': json.dumps({
+                'persistedQuery': {'version': 1, 'sha256Hash': sha256}
+            }),
+        },
+        headers={
+            'Authorization': f'Bearer {token}',
+            'User-Agent': _USER_AGENT,
+            'app-platform': 'WebPlayer',
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise ValueError(f'Unexpected partner payload for {operation}')
+    if 'errors' in data:
+        raise ValueError(f'GraphQL errors ({operation}): {data["errors"]}')
+    inner = data.get('data')
+    if not isinstance(inner, dict):
+        raise ValueError(f'Partner payload missing data for {operation}')
+    return inner
+
+
+def search_artists(query: str, limit: int = 10) -> list[dict[str, Any]]:
+    """Search Spotify artists by name via the partner ``searchSuggestions``."""
+
+    if not query.strip():
+        return []
+    token = _anonymous_token()
+    data = _partner_graphql(
+        'searchSuggestions',
+        {'query': query.strip(), 'limit': max(10, limit)},
+        _GRAPHQL_HASH_SEARCH,
+        token,
+    )
+    items = ((data.get('searchV2') or {}).get('topResultsV2') or {}).get(
+        'itemsV2'
+    ) or []
+    artists: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for wrapper in items:
+        if not isinstance(wrapper, dict):
+            continue
+        item = wrapper.get('item') or {}
+        if item.get('__typename') != 'ArtistResponseWrapper':
+            continue
+        node = item.get('data') or {}
+        artist_id = _id_from_uri(node.get('uri') or '')
+        if not artist_id or artist_id in seen:
+            continue
+        seen.add(artist_id)
+        profile = node.get('profile') or {}
+        avatar = (node.get('visuals') or {}).get('avatarImage') or {}
+        artists.append({
+            'artist_id': artist_id,
+            'name': profile.get('name') or '',
+            'url': f'https://open.spotify.com/artist/{artist_id}',
+            'cover_url': _largest_image(avatar.get('sources') or []),
+            'followers': 0,
+            'genres': [],
+            'source': 'spotify',
+        })
+        if len(artists) >= limit:
+            break
+    return artists
+
+
+def artist_info_from_id(artist_id: str) -> dict[str, Any]:
+    """Artist name/cover from the public embed page (also caches a token)."""
+
+    payload = _fetch_embed_json('artist', artist_id)
+    _cache_token_from_payload(payload)
+    entity = _entity_from(payload)
+    return {
+        'artist_id': artist_id,
+        'name': entity.get('name') or entity.get('title') or '',
+        'url': f'https://open.spotify.com/artist/{artist_id}',
+        'cover_url': _cover_url(entity),
+        'source': 'spotify',
+    }
+
+
+def _release_from_discography_item(
+    item: dict[str, Any],
+) -> Optional[dict[str, Any]]:
+    releases = (item.get('releases') or {}).get('items') or []
+    if not releases or not isinstance(releases[0], dict):
+        return None
+    release = releases[0]
+    album_id = _id_from_uri(release.get('uri') or '') or release.get('id')
+    if not album_id:
+        return None
+    cover = _largest_image(
+        (release.get('coverArt') or {}).get('sources') or []
+    )
+    tracks = release.get('tracks') or {}
+    return {
+        'album_id': album_id,
+        'name': release.get('name') or '',
+        'album_group': str(release.get('type') or '').casefold(),
+        'release_date': _release_date_raw_from_field(release.get('date')),
+        'total_tracks': int(tracks.get('totalCount') or 0)
+        if isinstance(tracks, dict)
+        else 0,
+        'cover_url': cover,
+        'url': f'https://open.spotify.com/album/{album_id}',
+    }
+
+
+def artist_albums_from_id(artist_id: str) -> list[dict[str, Any]]:
+    """All releases for an artist via partner GraphQL, de-duped by title."""
+
+    token = _anonymous_token(seed=('artist', artist_id))
+    albums: list[dict[str, Any]] = []
+    offset = 0
+    limit = 100
+    while True:
+        data = _partner_graphql(
+            'queryArtistDiscographyAll',
+            {
+                'uri': f'spotify:artist:{artist_id}',
+                'offset': offset,
+                'limit': limit,
+            },
+            _GRAPHQL_HASH_ARTIST_DISCOGRAPHY,
+            token,
+        )
+        disco = ((data.get('artistUnion') or {}).get('discography') or {}).get(
+            'all'
+        ) or {}
+        items = disco.get('items') or []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            album = _release_from_discography_item(item)
+            if album is not None:
+                albums.append(album)
+        total = int(disco.get('totalCount') or 0)
+        offset += len(items)
+        if not items or offset >= total:
+            break
+    # Spotify repeats releases across markets / reissues — keep the first
+    # occurrence of each (normalized title, track count) pair.
+    seen: set[tuple[str, int]] = set()
+    unique: list[dict[str, Any]] = []
+    for album in albums:
+        key = (
+            re.sub(r'\s+', ' ', album['name'].casefold()).strip(),
+            album['total_tracks'],
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(album)
+    return unique
+
+
+def _track_dedupe_key(track: dict[str, Any]) -> tuple[str, str]:
+    title = re.sub(r'\s+', ' ', str(track.get('name') or '').casefold())
+    artists = track.get('artists') or []
+    primary = str(artists[0] if artists else '').casefold().strip()
+    return title.strip(), primary
+
+
+def artist_all_tracks(artist_id: str) -> tuple[str, list[dict[str, Any]]]:
+    """Return ``(artist_name, tracks)`` across the artist's discography.
+
+    Albums are walked before singles so a song that appears both as a
+    single and on an LP keeps the album version; duplicates are dropped
+    by Spotify track id and by (title, primary artist).
+    """
+
+    info = artist_info_from_id(artist_id)
+    albums = artist_albums_from_id(artist_id)
+    ordered = [a for a in albums if a['album_group'] == 'album'] + [
+        a for a in albums if a['album_group'] != 'album'
+    ]
+    seen_ids: set[str] = set()
+    seen_titles: set[tuple[str, str]] = set()
+    tracks: list[dict[str, Any]] = []
+    for album in ordered:
+        try:
+            rows = album_tracks_from_id(album['album_id'])
+        except Exception:
+            logger.opt(exception=True).warning(
+                'Failed to resolve album {} ({}) for artist {}',
+                album['album_id'],
+                album['name'],
+                artist_id,
+            )
+            continue
+        for row in rows:
+            sid = row.get('song_id') or ''
+            key = _track_dedupe_key(row)
+            if sid in seen_ids or (key[0] and key in seen_titles):
+                continue
+            seen_ids.add(sid)
+            seen_titles.add(key)
+            tracks.append(row)
+    logger.info(
+        'Artist {} ({}): {} albums -> {} unique tracks',
+        info.get('name') or artist_id,
+        artist_id,
+        len(ordered),
+        len(tracks),
+    )
+    return info.get('name') or artist_id, tracks
+
+
 def _id_from_uri(uri: str) -> str:
     if not uri:
         return ''
@@ -724,4 +1030,6 @@ def resolve(url: str) -> Any:
         return album_tracks_from_id(sid)
     if kind == 'playlist':
         return playlist_tracks_from_id(sid)
+    if kind == 'artist':
+        return artist_all_tracks(sid)[1]
     raise ValueError(f'Unsupported Spotify entity type: {kind}')

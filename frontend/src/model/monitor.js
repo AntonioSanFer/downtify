@@ -28,10 +28,38 @@ function checkMonitoredPlaylist(id) {
   return API.post(`/api/monitor/playlists/${id}/check`)
 }
 
+function listMonitoredArtists() {
+  return API.get('/api/monitor/artists')
+}
+
+function addMonitoredArtist(url, intervalMinutes = 1440) {
+  return API.post('/api/monitor/artists', {
+    url,
+    interval_minutes: intervalMinutes,
+  })
+}
+
+function updateMonitoredArtist(id, updates) {
+  return API.patch(`/api/monitor/artists/${id}`, updates)
+}
+
+function deleteMonitoredArtist(id) {
+  return API.delete(`/api/monitor/artists/${id}`)
+}
+
+function checkMonitoredArtist(id) {
+  return API.post(`/api/monitor/artists/${id}/check`)
+}
+
 export default {
   listMonitoredPlaylists,
   addMonitoredPlaylist,
   updateMonitoredPlaylist,
   deleteMonitoredPlaylist,
   checkMonitoredPlaylist,
+  listMonitoredArtists,
+  addMonitoredArtist,
+  updateMonitoredArtist,
+  deleteMonitoredArtist,
+  checkMonitoredArtist,
 }
