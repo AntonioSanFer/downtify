@@ -60,6 +60,7 @@ Spotify's official API gates downloads behind a Premium subscription. Downtify t
 | Spotify track | `open.spotify.com/track/…` |
 | Spotify album | `open.spotify.com/album/…` |
 | Spotify playlist | `open.spotify.com/playlist/…` |
+| Spotify artist | `open.spotify.com/artist/…` |
 | YouTube / YT Music | `youtube.com/watch?v=…` |
 | Free-text search | `Arctic Monkeys Do I Wanna Know` |
 
@@ -75,6 +76,12 @@ Spotify's official API gates downloads behind a Premium subscription. Downtify t
   <span class="mini-card__icon">👁</span>
   <span class="mini-card__title">Playlist Monitor</span>
   <span class="mini-card__text">Watches a playlist and quietly downloads new tracks as they're added.</span>
+</a>
+
+<a href="features/artist/" class="mini-card">
+  <span class="mini-card__icon">🎤</span>
+  <span class="mini-card__title">Artist search</span>
+  <span class="mini-card__text">Find an artist by name, grab the whole discography, or watch for new releases.</span>
 </a>
 
 <a href="features/download-settings/" class="mini-card">

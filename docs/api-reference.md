@@ -46,6 +46,60 @@ Resolve a Spotify URL to metadata.
 
 `GET /api/url` is an alias for this endpoint.
 
+An **artist** URL is also accepted: it resolves to the artist's full,
+de-duplicated discography as an array of song objects.
+
+---
+
+### `GET /api/artist/search`
+
+Search Spotify artists by name.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Artist name |
+
+**Response:** Array of artist objects (up to 10 results):
+
+```json
+[
+  {
+    "artist_id": "4tZwfgrHOc3mvqYlEYSvVi",
+    "name": "Daft Punk",
+    "url": "https://open.spotify.com/artist/4tZwfgrHOc3mvqYlEYSvVi",
+    "cover_url": "https://i.scdn.co/image/ab6761610000e5eb…",
+    "followers": 0,
+    "genres": [],
+    "source": "spotify"
+  }
+]
+```
+
+`cover_url` is the artist's avatar image (largest available size).
+`followers` and `genres` are not exposed by the search endpoint and are
+returned as `0` / `[]`.
+
+---
+
+### `GET /api/artist/tracks`
+
+Resolve the full, de-duplicated discography for an artist.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `url` | string | yes | Spotify artist URL or bare artist id |
+
+**Response:**
+
+```json
+{
+  "artist_id": "4tZwfgrHOc3mvqYlEYSvVi",
+  "name": "Daft Punk",
+  "url": "https://open.spotify.com/artist/4tZwfgrHOc3mvqYlEYSvVi",
+  "tracks": [ /* array of song objects */ ]
+}
+```
+
 ---
 
 ## Downloads
@@ -267,6 +321,63 @@ Stop monitoring a playlist.
 Trigger an immediate check for a specific playlist outside the normal schedule.
 
 **Response:** `{ "downloaded": 3 }`
+
+---
+
+## Artist Monitor
+
+### `GET /api/monitor/artists`
+
+List all monitored artists.
+
+**Response:** Array of artist monitor objects.
+
+---
+
+### `POST /api/monitor/artists`
+
+Add an artist to the watchlist. Triggers an immediate initial backfill.
+
+**Request body:**
+
+```json
+{
+  "url": "https://open.spotify.com/artist/…",
+  "interval_minutes": 1440
+}
+```
+
+`interval_minutes` defaults to **1440** (once a day) when omitted.
+
+**Response:** Artist monitor object. Returns `409` if the artist is already
+being monitored.
+
+---
+
+### `PATCH /api/monitor/artists/{artist_id}`
+
+Update a monitored artist (interval, enabled state).
+
+**Request body:** Partial object with `interval_minutes` and/or `enabled`.
+
+**Response:** Updated artist monitor object. `404` if not found.
+
+---
+
+### `DELETE /api/monitor/artists/{artist_id}`
+
+Stop watching an artist (downloaded files are kept).
+
+**Response:** `{ "deleted": true, "id": 1 }`. `404` if not found.
+
+---
+
+### `POST /api/monitor/artists/{artist_id}/check`
+
+Trigger an immediate check for a specific artist outside the normal
+schedule. Runs in the background.
+
+**Response:** `{ "status": "check_started", "id": 1 }`
 
 ---
 

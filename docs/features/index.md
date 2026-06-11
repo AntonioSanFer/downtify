@@ -12,6 +12,7 @@ Downtify covers everything you need to build and maintain a local music library 
 |---------|-------------|
 | [Download Settings](download-settings.md) | Choose format (MP3/FLAC/M4A/OGG/OPUS) and bitrate per download |
 | [Playlist Monitor](playlist-monitor.md) | Watch playlists and auto-download new tracks as they appear on Spotify |
+| [Artist Search & Watchlist](artist.md) | Search artists by name, download a full discography, and auto-download new releases |
 | [Built-in Player](player.md) | Play your downloaded music in the browser with shuffle, repeat and album art |
 | [M3U Export](m3u-export.md) | Auto-generated playlist files for Jellyfin, Navidrome, Plex and any media app |
 | [File Organization](file-organization.md) | Flat layout or per-artist subfolders |
@@ -27,6 +28,7 @@ Downtify accepts several input types in the search bar:
 | Spotify track URL | `https://open.spotify.com/track/…` |
 | Spotify album URL | `https://open.spotify.com/album/…` |
 | Spotify playlist URL | `https://open.spotify.com/playlist/…` |
+| Spotify artist URL | `https://open.spotify.com/artist/…` |
 | YouTube / YouTube Music URL | `https://www.youtube.com/watch?v=…` |
 | Free-text search | `Arctic Monkeys Do I Wanna Know` |
 
